@@ -2,8 +2,9 @@ const express = require('express');
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
+const schedule = require('node-schedule');
 
-const { Good, Auction, User } = require('../models');
+const { Good, Auction, User, sequelize } = require('../models');
 const { isLoggedIn, isNotLoggedIn } = require('./middlewares');
 
 const router = express.Router();
@@ -65,11 +66,36 @@ const upload = multer({
 router.post('/good', isLoggedIn, upload.single('img'), async (req, res, next) => {
   try {
     const { name, price } = req.body;
-    await Good.create({
+    const good = await Good.create({
       ownerId: req.user.id,
       name,
       img: req.file.filename,
       price,
+    });
+    const end = new Date();
+    end.setDate(end.getDate() + 1); // 하루 뒤
+    
+    // 첫 번째 인자 : 실행될 시각
+    // 두 번째 인자 : 해당 시각이 되었을 때 수행할 콜백 함수
+    schedule.scheduleJob(end, async () => {
+
+      // 가장 높은 입찰을 한사람 찾기
+      const success = await Auction.findOne({
+        where: { goodId: good.id },
+        order: [['bid', 'DESC']],
+      });
+
+      // 상품 모델의 낙찰자 아이디 업데이트
+      await Good.update({ soldId: success.userId }, { where: { id: good.id } });
+
+      // 낙찰자의 보유자산 정산
+      await User.update({
+
+        // sequelize에서 숫자를 줄이는 방법. 쿼리문자열을 추가해줌
+        money: sequelize.literal(`money - ${success.bid}`),
+      }, {
+        where: { id: success.userId },
+      });
     });
     res.redirect('/');
   } catch (error) {
