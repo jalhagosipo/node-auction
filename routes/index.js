@@ -173,4 +173,20 @@ router.post('/good/:id/bid', isLoggedIn, async (req, res, next) => {
   }
 });
 
+// 낙찰 내역보기
+router.get('/list', isLoggedIn, async (req, res, next) => {
+  try {
+    // 낙찰된 상품과 그 상품의 입찰 내역을 조회. 입찰내역 내림차순
+    const goods = await Good.findAll({
+      where: { soldId: req.user.id },
+      include: { model: Auction },
+      order: [[{ model: Auction }, 'bid', 'DESC']],
+    });
+    res.render('list', { title: '낙찰 목록 - NodeAuction', goods });
+  } catch (error) {
+    console.error(error);
+    next(error);
+  }
+});
+
 module.exports = router;
